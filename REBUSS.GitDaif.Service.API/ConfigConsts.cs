@@ -1,9 +1,7 @@
-﻿namespace GitDaif.ServiceAPI
+﻿namespace REBUSS.GitDaif.Service.API
 {
-    public class ConfigConsts
+    public static class ConfigConsts
     {
-        public const string MicrosoftCopilot = "MicrosoftCopilot";
-
         public const string OpenAI = "OpenAI";
     }
 }

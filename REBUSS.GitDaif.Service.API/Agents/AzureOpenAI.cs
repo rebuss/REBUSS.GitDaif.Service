@@ -1,11 +1,10 @@
 ﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-using REBUSS.GitDaif.Service.API.Agents;
 using REBUSS.GitDaif.Service.API.DTO.Responses;
 
-namespace GitDaif.ServiceAPI.Agents
+namespace REBUSS.GitDaif.Service.API.Agents
 {
-    public class AzureOpenAI : InterfaceAI
+    public class AzureOpenAI : IAIAgent
     {
         private readonly Kernel _kernel;
         private readonly ILogger<AzureOpenAI> _logger;

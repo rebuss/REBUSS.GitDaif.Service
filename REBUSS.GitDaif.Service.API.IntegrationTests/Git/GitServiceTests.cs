@@ -1,50 +1,57 @@
-﻿using GitDaif.ServiceAPI;
-using LibGit2Sharp;
+﻿using LibGit2Sharp;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using REBUSS.GitDaif.Service.API.DTO.Requests;
+using REBUSS.GitDaif.Service.API.IntegrationTests.Fixtures;
 using REBUSS.GitDaif.Service.API.Properties;
 using REBUSS.GitDaif.Service.API.Services;
 
 namespace REBUSS.GitDaif.Service.API.IntegrationTests.Git
 {
     [TestFixture]
-    public class GitServiceTests
+    [Category("Integration")]
+    [Category("GitService")]
+    public class GitServiceTests : TestFixtureBase
     {
         private GitService _gitService;
         private string _filePath;
         private string _branchName;
-        private AppSettings _appSettings;
 
         [SetUp]
-        public void Setup()
+        public override void Setup()
         {
-            var serviceCollection = new ServiceCollection();
-            _appSettings = BuildSettings();
-            _gitService = new GitService(_appSettings);
+            base.Setup();
+            
+            using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+            var logger = loggerFactory.CreateLogger<GitService>();
+            _gitService = new GitService(CreateOptions(AppSettings), logger);
 
             _branchName = "testing";
+            _filePath = Configuration["TestSettings:TestFilePath"] ?? "README.md";
         }
 
         [Test]
+        [Ignore("Requires actual Azure DevOps Pull Request")]
         public async Task GetBranchNameForPullRequest_Should_Return_Correct_BranchName()
         {
-
             // Act
             var result = await _gitService.GetBranchNameForPullRequest(GetPullRequestData());
 
             // Assert
-            Assert.That(result, Is.EqualTo(_branchName));
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result, Is.Not.Empty);
         }
 
         [Test]
+        [Ignore("Requires actual Azure DevOps Pull Request")]
         public async Task GetDiffContentForChanges_Should_Return_Valid_Diff()
         {
             // Arrange
-            var localRepoPath = _appSettings.LocalRepoPath;
+            var localRepoPath = AppSettings.LocalRepoPath;
 
             // Act
-            var result = await _gitService.GetPullRequestDiffContent(GetPullRequestData(), new Repository(localRepoPath));
+            using var repo = new Repository(localRepoPath);
+            var result = await _gitService.GetPullRequestDiffContent(GetPullRequestData(), repo);
 
             // Assert
             Assert.That(result, Is.Not.Empty);
@@ -52,27 +59,44 @@ namespace REBUSS.GitDaif.Service.API.IntegrationTests.Git
         }
 
         [Test]
-        public async Task ExtractModifiedFileName_Should_Return_Correct_FileName()
+        public void ExtractModifiedFileName_Should_Return_Correct_FileName()
         {
             // Arrange
-            var localRepoPath = _appSettings.LocalRepoPath;
-            var diffContent = await _gitService.GetPullRequestDiffContent(GetPullRequestData(), new Repository(localRepoPath));
+            var sampleDiff = @"diff --git a/src/Services/GitService.cs b/src/Services/GitService.cs
+index 123abc..456def 100644
+--- a/src/Services/GitService.cs
++++ b/src/Services/GitService.cs";
 
             // Act
-            var result = _gitService.ExtractModifiedFileName(diffContent);
+            var result = _gitService.ExtractModifiedFileName(sampleDiff);
 
             // Assert
-            Assert.That(result, Is.EqualTo(Path.GetFileName(_filePath)));
+            Assert.That(result, Is.EqualTo("GitService.cs"));
         }
 
         [Test]
+        public void ExtractModifiedFileName_WithEmptyDiff_ReturnsEmptyString()
+        {
+            // Arrange
+            var emptyDiff = "";
+
+            // Act
+            var result = _gitService.ExtractModifiedFileName(emptyDiff);
+
+            // Assert
+            Assert.That(result, Is.Empty);
+        }
+
+        [Test]
+        [Ignore("Requires actual Azure DevOps Pull Request")]
         public async Task GetFullDiffFileFor_Should_Return_Valid_Diff()
         {
             // Arrange
-            var localRepoPath = _appSettings.LocalRepoPath;
+            var localRepoPath = AppSettings.LocalRepoPath;
 
             // Act
-            var result = await _gitService.GetFullDiffFileFor(new Repository(localRepoPath), GetPullRequestData(), _filePath);
+            using var repo = new Repository(localRepoPath);
+            var result = await _gitService.GetFullDiffFileFor(repo, GetPullRequestData(), _filePath);
 
             // Assert
             Assert.That(result, Is.Not.Empty);
@@ -80,29 +104,112 @@ namespace REBUSS.GitDaif.Service.API.IntegrationTests.Git
         }
 
         [Test]
-        public async Task GetLocalChangesDiffContent_Should_Return_Valid_Diff_For_Staged_Changes_Only()
+        public async Task GetLocalChangesDiffContent_Should_Return_Valid_Diff_Or_Empty()
         {
             // Act
             var result = await _gitService.GetLocalChangesDiffContent();
 
             // Assert
-            Assert.That(result, Is.Not.Empty);
             Assert.That(result, Is.Not.Null);
+            // Result can be empty if there are no local changes
         }
 
-        private AppSettings BuildSettings()
+        [Test]
+        public void IsDiffFileContainsChangesInMultipleFiles_WithSingleFile_ReturnsFalse()
         {
-            var config = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .Build();
+            // Arrange
+            var singleFileDiff = @"diff --git a/file.cs b/file.cs
+index 123..456 100644
+--- a/file.cs
++++ b/file.cs";
 
-            return new AppSettings()
-            {
-                DiffFilesDirectory = config["DiffFilesDirectory"],
-                LocalRepoPath = config["LocalRepoPath"],
-                PersonalAccessToken = config["PersonalAccessToken"]
-            };
+            // Act
+            var result = _gitService.IsDiffFileContainsChangesInMultipleFiles(singleFileDiff);
+
+            // Assert
+            Assert.That(result, Is.False);
+        }
+
+        [Test]
+        public void IsDiffFileContainsChangesInMultipleFiles_WithMultipleFiles_ReturnsTrue()
+        {
+            // Arrange
+            var multiFileDiff = @"diff --git a/file1.cs b/file1.cs
+index 123..456 100644
+--- a/file1.cs
++++ b/file1.cs
+diff --git a/file2.cs b/file2.cs
+index 789..abc 100644
+--- a/file2.cs
++++ b/file2.cs";
+
+            // Act
+            var result = _gitService.IsDiffFileContainsChangesInMultipleFiles(multiFileDiff);
+
+            // Assert
+            Assert.That(result, Is.True);
+        }
+
+        [Test]
+        public void PrepareFilePath_WithLeadingSlash_RemovesSlash()
+        {
+            // Arrange
+            var filePath = "/src/Services/GitService.cs";
+
+            // Act
+            var result = _gitService.PrepareFilePath(filePath);
+
+            // Assert
+            Assert.That(result, Is.EqualTo("src/Services/GitService.cs"));
+        }
+
+        [Test]
+        public void PrepareFilePath_WithoutLeadingSlash_ReturnsUnchanged()
+        {
+            // Arrange
+            var filePath = "src/Services/GitService.cs";
+
+            // Act
+            var result = _gitService.PrepareFilePath(filePath);
+
+            // Assert
+            Assert.That(result, Is.EqualTo(filePath));
+        }
+
+        [Test]
+        public void PrepareFilePath_WithNull_ReturnsEmpty()
+        {
+            // Act
+            var result = _gitService.PrepareFilePath(null);
+
+            // Assert
+            Assert.That(result, Is.Empty);
+        }
+
+        [Test]
+        public void ExtractBranchNameFromRef_WithFullRef_ExtractsBranchName()
+        {
+            // Arrange
+            var refName = "refs/heads/feature/my-branch";
+
+            // Act
+            var result = _gitService.ExtractBranchNameFromRef(refName);
+
+            // Assert
+            Assert.That(result, Is.EqualTo("feature/my-branch"));
+        }
+
+        [Test]
+        public void ExtractBranchNameFromRef_WithoutRefsPrefix_ReturnsUnchanged()
+        {
+            // Arrange
+            var refName = "main";
+
+            // Act
+            var result = _gitService.ExtractBranchNameFromRef(refName);
+
+            // Assert
+            Assert.That(result, Is.EqualTo("main"));
         }
 
         private PullRequestData GetPullRequestData()

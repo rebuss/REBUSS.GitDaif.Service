@@ -1,29 +1,28 @@
-﻿using GitDaif.ServiceAPI;
-using LibGit2Sharp;
+﻿using LibGit2Sharp;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using REBUSS.GitDaif.Service.API;
 using REBUSS.GitDaif.Service.API.Agents;
 using REBUSS.GitDaif.Service.API.DTO.Requests;
 using REBUSS.GitDaif.Service.API.DTO.Responses;
 using REBUSS.GitDaif.Service.API.Properties;
 using REBUSS.GitDaif.Service.API.Services;
+using REBUSS.GitDaif.Service.API.Validators;
 
-namespace REBUSS.GitDaif.Service.Controllers
+namespace REBUSS.GitDaif.Service.API.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    public class PullRequestController : Controller
+    public class PullRequestController : ControllerBase
     {
         private readonly GitService gitService;
         private readonly string diffFilesDirectory;
         private readonly string localRepoPath;
-        private readonly InterfaceAI aiAgent;
+        private readonly IAIAgent aiAgent;
         private readonly ILogger<PullRequestController> logger;
 
         public PullRequestController(IOptions<AppSettings> settings, 
                                      ILogger<PullRequestController> logger,
-                                     InterfaceAI agent,
+                                     IAIAgent agent,
                                      GitService gitService)
         {
             this.gitService = gitService;
@@ -38,7 +37,7 @@ namespace REBUSS.GitDaif.Service.Controllers
         {
             try
             {
-                if(!Validation.IsPullRequestDataOk(data))
+                if(!RequestValidator.IsValid(data))
                 {
                     return BadRequest("Invalid pull request data.");
                 }
@@ -61,7 +60,7 @@ namespace REBUSS.GitDaif.Service.Controllers
         {
             try
             {
-                if (!Validation.IsPullRequestDataOk(data))
+                if (!RequestValidator.IsValid(data))
                 {
                     return BadRequest("Invalid pull request data.");
                 }
@@ -81,7 +80,7 @@ namespace REBUSS.GitDaif.Service.Controllers
         {
             try
             {
-                if (!Validation.IsPullRequestDataOk(data))
+                if (!RequestValidator.IsValid(data))
                 {
                     return BadRequest("Invalid pull request data.");
                 }
@@ -131,7 +130,7 @@ namespace REBUSS.GitDaif.Service.Controllers
         {
             try
             {
-                if (!Validation.IsFileReviewDataOk(data))
+                if (!RequestValidator.IsValid(data))
                 {
                     return BadRequest("Invalid file review data.");
                 }
@@ -139,18 +138,27 @@ namespace REBUSS.GitDaif.Service.Controllers
                 using (var repo = new Repository(localRepoPath))
                 {
                     var fileName = FormatFileName(data.FilePath);
-                    var diffFile = GetLatestReviewFile(fileName);
-                    string diffContent = System.IO.File.Exists(diffFile) ? System.IO.File.ReadAllText(diffFile) : string.Empty;
-
-                    if (string.IsNullOrEmpty(diffContent) || !await gitService.IsLatestCommitIncludedInDiff(data, diffContent, repo))
+                    var existingDiffFile = GetLatestReviewFile(fileName);
+                    string diffFilePath = existingDiffFile;
+                    
+                    bool needsNewDiff = string.IsNullOrEmpty(existingDiffFile) || 
+                                       !System.IO.File.Exists(existingDiffFile);
+                    
+                    if (!needsNewDiff)
                     {
-                        diffContent = await gitService.GetFullDiffFileFor(repo, data, fileName);
-                        diffFile = await SaveDiffContentToFile(diffContent, $"{data.Id}_FileReview_{fileName}");
-                        logger.LogInformation($"Saved diff file to: {diffFile}");
+                        var existingContent = await System.IO.File.ReadAllTextAsync(existingDiffFile);
+                        needsNewDiff = !await gitService.IsLatestCommitIncludedInDiff(data, existingContent, repo);
+                    }
+
+                    if (needsNewDiff)
+                    {
+                        var diffContent = await gitService.GetFullDiffFileFor(repo, data, data.FilePath);
+                        diffFilePath = await SaveDiffContentToFile(diffContent, $"{data.Id}_FileReview_{fileName}");
+                        logger.LogInformation("Saved diff file to: {DiffFilePath}", diffFilePath);
                     }
 
                     PreProcessPullRequestData(data, "Prompts/ReviewSingleFile.txt");
-                    return await ReviewSingleFile(diffFile, data.Query);
+                    return await ReviewSingleFileInternal(diffFilePath, data.Query);
                 }
             }
             catch (Exception ex)
@@ -165,7 +173,7 @@ namespace REBUSS.GitDaif.Service.Controllers
         {
             try
             {
-                if (!Validation.IsLocalFileReviewDataOk(data))
+                if (!RequestValidator.IsValid(data))
                 {
                     return BadRequest("Invalid local file review data.");
                 }
@@ -174,10 +182,10 @@ namespace REBUSS.GitDaif.Service.Controllers
                 {
                     var fileName = FormatFileName(data.FilePath);
                     var diffContent = await gitService.GetFullDiffFileForLocal(repo, data.FilePath);
-                    var diffFile = await SaveDiffContentToFile(diffContent, $"LocalFileReview_{fileName}");
-                    logger.LogInformation($"Saved diff file to: {diffFile}");
+                    var diffFilePath = await SaveDiffContentToFile(diffContent, $"LocalFileReview_{fileName}");
+                    logger.LogInformation("Saved diff file to: {DiffFilePath}", diffFilePath);
                     PreProcessPullRequestData(data, "Prompts/ReviewSingleFile.txt");
-                    return await ReviewSingleFile(diffFile, data.Query);
+                    return await ReviewSingleFileInternal(diffFilePath, data.Query);
                 }
             }
             catch (Exception ex)
@@ -187,7 +195,7 @@ namespace REBUSS.GitDaif.Service.Controllers
             }
         }
 
-        private async Task<IActionResult> ReviewSingleFile(string diffFilePath, string prompt)
+        private async Task<IActionResult> ReviewSingleFileInternal(string diffFilePath, string prompt)
         {
             var result = await aiAgent.AskAgent(prompt, diffFilePath);
             logger.LogInformation("Got AI agent response.");
@@ -201,27 +209,38 @@ namespace REBUSS.GitDaif.Service.Controllers
 
         private async Task<string> SaveDiffContentToFile(string diffContent, string fileName)
         {
-            string fullDiffFilePath = Path.Combine(diffFilesDirectory, $"{fileName}_{DateTime.Now.ToString("yyyyMMddHHmmssfff")}.diff.txt");
+            string fullDiffFilePath = Path.Combine(diffFilesDirectory, $"{fileName}_{DateTime.Now:yyyyMMddHHmmssfff}.diff.txt");
             await System.IO.File.WriteAllTextAsync(fullDiffFilePath, diffContent);
-            logger.LogInformation($"Saved diff file to: {fullDiffFilePath}");
+            logger.LogInformation("Saved diff file to: {FilePath}", fullDiffFilePath);
             return fullDiffFilePath;
         }
 
         private async Task<IActionResult> ProcessPullRequest(PullRequestData prData)
         {
-            var diffFile = GetLatestReviewFile(prData.Id);
-            string diffContent = string.Empty;
+            var existingDiffFile = GetLatestReviewFile(prData.Id);
+            string diffFilePath = existingDiffFile;
+            
             using (var repo = new Repository(localRepoPath))
             {
-                if (string.IsNullOrEmpty(diffFile) || !await gitService.IsLatestCommitIncludedInDiff(prData, diffFile, repo))
+                bool needsNewDiff = string.IsNullOrEmpty(existingDiffFile) || 
+                                   !System.IO.File.Exists(existingDiffFile);
+                
+                if (!needsNewDiff)
                 {
-                    diffContent = await gitService.GetPullRequestDiffContent(prData, repo);
-                    string fileName = Path.Combine(diffFilesDirectory, $"{prData.Id}_Review_{DateTime.Now.ToString("yyyyMMddHHmmssfff")}.diff.txt");
-                    await System.IO.File.WriteAllTextAsync(fileName, diffContent);
+                    var existingContent = await System.IO.File.ReadAllTextAsync(existingDiffFile);
+                    needsNewDiff = !await gitService.IsLatestCommitIncludedInDiff(prData, existingContent, repo);
+                }
+
+                if (needsNewDiff)
+                {
+                    var diffContent = await gitService.GetPullRequestDiffContent(prData, repo);
+                    diffFilePath = Path.Combine(diffFilesDirectory, $"{prData.Id}_Review_{DateTime.Now:yyyyMMddHHmmssfff}.diff.txt");
+                    await System.IO.File.WriteAllTextAsync(diffFilePath, diffContent);
+                    logger.LogInformation("Created new diff file: {DiffFilePath}", diffFilePath);
                 }
             }
 
-            var result = await aiAgent.AskAgent(prData.Query, diffFile);
+            var result = await aiAgent.AskAgent(prData.Query, diffFilePath);
             logger.LogInformation("Got AI agent response.");
             return Ok(result);
         }
@@ -229,8 +248,9 @@ namespace REBUSS.GitDaif.Service.Controllers
         private async Task<IActionResult> ProcessLocalChanges(string prompt)
         {
             var diffContent = await gitService.GetLocalChangesDiffContent();
-            string fileName = Path.Combine(diffFilesDirectory, $"LocalReview_{DateTime.Now.ToString("yyyyMMddHHmmssfff")}.diff.txt");
+            string fileName = Path.Combine(diffFilesDirectory, $"LocalReview_{DateTime.Now:yyyyMMddHHmmssfff}.diff.txt");
             await System.IO.File.WriteAllTextAsync(fileName, diffContent);
+            logger.LogInformation("Saved local changes diff to: {FileName}", fileName);
             var result = await aiAgent.AskAgent(prompt, fileName);
             logger.LogInformation("Got AI agent response.");
             return Ok(result);

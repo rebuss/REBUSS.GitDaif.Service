@@ -1,11 +1,9 @@
-﻿using GitDaif.ServiceAPI.Agents;
-using GitDaif.ServiceAPI;
-using REBUSS.GitDaif.Service.API.Agents;
+﻿using REBUSS.GitDaif.Service.API.Agents;
 using REBUSS.GitDaif.Service.API.Properties;
+using REBUSS.GitDaif.Service.API.Services;
 using Serilog;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
-using REBUSS.GitDaif.Service.API.Services;
 using Microsoft.SemanticKernel.ChatCompletion;
 
 namespace REBUSS.GitDaif.Service.API
@@ -29,8 +27,7 @@ namespace REBUSS.GitDaif.Service.API
             .AddUserSecrets<Program>(optional: true)
             .AddEnvironmentVariables();
             builder.Services.Configure<AppSettings>(builder.Configuration);
-            builder.Services.Configure<CopilotSettings>(builder.Configuration.GetSection(ConfigConsts.MicrosoftCopilot));
-            builder.Services.Configure<OpenAISettings>(builder.Configuration.GetSection(ConfigConsts.OpenAI));
+            builder.Services.Configure<OpenAISettings>(builder.Configuration.GetSection("OpenAI"));
             
             return builder;
         }
@@ -45,21 +42,10 @@ namespace REBUSS.GitDaif.Service.API
                 var appSettings = provider.GetRequiredService<IOptions<AppSettings>>().Value;
                 return new DiffFileCleanerBackgroundService(appSettings.DiffFilesDirectory, logger);
             });
-            AppSettings appSettings = builder.Configuration.Get<AppSettings>();
-            switch (appSettings.AIAgent)
-            {
-                case ConfigConsts.MicrosoftCopilot:
-                    builder.Services.AddScoped<InterfaceAI, BrowserCopilotForEnterprise>();
-                    break;
-                case ConfigConsts.OpenAI:
-                    var settings = builder.Configuration.GetSection(ConfigConsts.OpenAI).Get<OpenAISettings>();
-                    var kernel = GetKernel(settings);
-                    builder.Services.AddSingleton(kernel);
-                    builder.Services.AddScoped<InterfaceAI, AzureOpenAI>();
-                    break;
-                default:
-                    break;
-            }
+            var settings = builder.Configuration.GetSection("OpenAI").Get<OpenAISettings>();
+            var kernel = GetKernel(settings);
+            builder.Services.AddSingleton(kernel);
+            builder.Services.AddScoped<IAIAgent, AzureOpenAI>();
 
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();

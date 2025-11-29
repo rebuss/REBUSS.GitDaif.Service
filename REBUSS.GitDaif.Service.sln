@@ -9,6 +9,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "REBUSS.GitDaif.Service.API.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "REBUSS.GitDaif.Service.API.UnitTests", "REBUSS.GitDaif.Service.API.UnitTests\REBUSS.GitDaif.Service.API.UnitTests.csproj", "{11E0442B-B9FF-4383-8DCB-DCD080667E10}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "REBUSS.GitDaif.Service.AzureDevOpsAPI", "REBUSS.GitDaif.Service.AzureDevOpsAPI\REBUSS.GitDaif.Service.AzureDevOpsAPI.csproj", "{52C0A032-41F7-4FAB-926D-4E95728EBCE8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "REBUSS.GitDaif.Service.AzureDevOpsAPI.Tests", "REBUSS.GitDaif.Service.AzureDevOpsAPI.IntegrationTests\REBUSS.GitDaif.Service.AzureDevOpsAPI.Tests.csproj", "{F1F2B63F-BEF5-F364-8F06-615108F77AAA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,8 +31,19 @@ Global
 		{11E0442B-B9FF-4383-8DCB-DCD080667E10}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{11E0442B-B9FF-4383-8DCB-DCD080667E10}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{11E0442B-B9FF-4383-8DCB-DCD080667E10}.Release|Any CPU.Build.0 = Release|Any CPU
+		{52C0A032-41F7-4FAB-926D-4E95728EBCE8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{52C0A032-41F7-4FAB-926D-4E95728EBCE8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{52C0A032-41F7-4FAB-926D-4E95728EBCE8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{52C0A032-41F7-4FAB-926D-4E95728EBCE8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F1F2B63F-BEF5-F364-8F06-615108F77AAA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F1F2B63F-BEF5-F364-8F06-615108F77AAA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F1F2B63F-BEF5-F364-8F06-615108F77AAA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F1F2B63F-BEF5-F364-8F06-615108F77AAA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FEBE8BFC-0DBC-4770-A22F-0AD3FCC1F070}
 	EndGlobalSection
 EndGlobal

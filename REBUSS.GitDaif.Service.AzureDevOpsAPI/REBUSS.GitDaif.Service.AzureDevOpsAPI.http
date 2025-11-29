@@ -1,0 +1,4 @@
+@REBUSS.GitDaif.Service.AzureDevOpsAPI_HostAddress = http://localhost:5018
+
+GET {{REBUSS.GitDaif.Service.AzureDevOpsAPI_HostAddress}}/azuredevops/
+Accept: application/json

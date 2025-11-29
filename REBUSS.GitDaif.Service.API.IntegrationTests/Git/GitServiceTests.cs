@@ -2,8 +2,9 @@
 using LibGit2Sharp;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using REBUSS.GitDaif.Service.API.Git;
-using NUnit.Framework;
+using REBUSS.GitDaif.Service.API.DTO.Requests;
+using REBUSS.GitDaif.Service.API.Properties;
+using REBUSS.GitDaif.Service.API.Services;
 
 namespace REBUSS.GitDaif.Service.API.IntegrationTests.Git
 {
@@ -11,30 +12,18 @@ namespace REBUSS.GitDaif.Service.API.IntegrationTests.Git
     public class GitServiceTests
     {
         private GitService _gitService;
-        private IConfiguration _configuration;
         private string _filePath;
         private string _branchName;
-        private int _pullRequestId;
+        private AppSettings _appSettings;
 
         [SetUp]
         public void Setup()
         {
             var serviceCollection = new ServiceCollection();
-            _configuration = BuildConfiguration();
-            _gitService = new GitService(_configuration);
+            _appSettings = BuildSettings();
+            _gitService = new GitService(_appSettings);
 
-            _filePath = _configuration["TestSettings:FilePath"];
-            _branchName = _configuration["TestSettings:BranchName"];
-            _pullRequestId = int.Parse(_configuration["TestSettings:PullRequestId"]);
-        }
-
-        private IConfiguration BuildConfiguration()
-        {
-            return new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.local.json", optional: false, reloadOnChange: true)
-                .AddJsonFile("appsettings.test.json", optional: false, reloadOnChange: true)
-                .Build();
+            _branchName = "testing";
         }
 
         [Test]
@@ -42,7 +31,7 @@ namespace REBUSS.GitDaif.Service.API.IntegrationTests.Git
         {
 
             // Act
-            var result = await _gitService.GetBranchNameForPullRequest(_pullRequestId);
+            var result = await _gitService.GetBranchNameForPullRequest(GetPullRequestData());
 
             // Assert
             Assert.That(result, Is.EqualTo(_branchName));
@@ -52,10 +41,10 @@ namespace REBUSS.GitDaif.Service.API.IntegrationTests.Git
         public async Task GetDiffContentForChanges_Should_Return_Valid_Diff()
         {
             // Arrange
-            var localRepoPath = _configuration[ConfigConsts.LocalRepoPathKey];
+            var localRepoPath = _appSettings.LocalRepoPath;
 
             // Act
-            var result = await _gitService.GetPullRequestDiffContent(_pullRequestId, new Repository(localRepoPath));
+            var result = await _gitService.GetPullRequestDiffContent(GetPullRequestData(), new Repository(localRepoPath));
 
             // Assert
             Assert.That(result, Is.Not.Empty);
@@ -66,8 +55,8 @@ namespace REBUSS.GitDaif.Service.API.IntegrationTests.Git
         public async Task ExtractModifiedFileName_Should_Return_Correct_FileName()
         {
             // Arrange
-            var localRepoPath = _configuration[ConfigConsts.LocalRepoPathKey];
-            var diffContent = await _gitService.GetPullRequestDiffContent(_pullRequestId, new Repository(localRepoPath));
+            var localRepoPath = _appSettings.LocalRepoPath;
+            var diffContent = await _gitService.GetPullRequestDiffContent(GetPullRequestData(), new Repository(localRepoPath));
 
             // Act
             var result = _gitService.ExtractModifiedFileName(diffContent);
@@ -80,10 +69,10 @@ namespace REBUSS.GitDaif.Service.API.IntegrationTests.Git
         public async Task GetFullDiffFileFor_Should_Return_Valid_Diff()
         {
             // Arrange
-            var localRepoPath = _configuration[ConfigConsts.LocalRepoPathKey];
+            var localRepoPath = _appSettings.LocalRepoPath;
 
             // Act
-            var result = await _gitService.GetFullDiffFileFor(new Repository(localRepoPath), _pullRequestId, _filePath);
+            var result = await _gitService.GetFullDiffFileFor(new Repository(localRepoPath), GetPullRequestData(), _filePath);
 
             // Assert
             Assert.That(result, Is.Not.Empty);
@@ -100,6 +89,31 @@ namespace REBUSS.GitDaif.Service.API.IntegrationTests.Git
             Assert.That(result, Is.Not.Empty);
             Assert.That(result, Is.Not.Null);
         }
+
+        private AppSettings BuildSettings()
+        {
+            var config = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
+
+            return new AppSettings()
+            {
+                DiffFilesDirectory = config["DiffFilesDirectory"],
+                LocalRepoPath = config["LocalRepoPath"],
+                PersonalAccessToken = config["PersonalAccessToken"]
+            };
+        }
+
+        private PullRequestData GetPullRequestData()
+        {
+            return new PullRequestData
+            {
+                OrganizationName = "REBUSS",
+                ProjectName = "REBUSS",
+                RepositoryName = "REBUSS",
+                Id = 1
+            };
+        }
     }
 }
-

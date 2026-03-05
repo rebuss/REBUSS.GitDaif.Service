@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>REBUSS PR Tracker</title>
+  <link rel="stylesheet" href="panel.css" />
+</head>
+<body>
+  <!-- ── Header bar ── -->
+  <header id="header">
+    <h1>PR Tracker</h1>
+    <div class="header-actions">
+      <button id="btn-refresh" title="Refresh pull requests">&#x21bb; Refresh</button>
+      <button id="btn-settings" title="Open settings">&#x2699;</button>
+    </div>
+  </header>
+
+  <!-- ── Status / error banner ── -->
+  <div id="status-bar" class="hidden"></div>
+
+  <!-- ── Filter tabs ── -->
+  <nav id="filter-bar">
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="needs-review">Needs My Review</button>
+    <button class="filter-btn" data-filter="approved">Approved</button>
+    <button class="filter-btn" data-filter="done">Done</button>
+  </nav>
+
+  <!-- ── PR list ── -->
+  <main id="pr-list">
+    <!-- PR cards rendered here by panel.js -->
+  </main>
+
+  <!-- ── Loading overlay ── -->
+  <div id="loading" class="hidden">
+    <div class="spinner"></div>
+    <span>Loading pull requests…</span>
+  </div>
+
+  <!-- ── Empty state ── -->
+  <div id="empty-state" class="hidden">
+    <p>No pull requests to show.</p>
+    <p class="hint">Configure your Azure DevOps settings first.</p>
+    <button id="btn-open-options">Open Settings</button>
+  </div>
+
+  <script type="module" src="panel.js"></script>
+</body>
+</html>
